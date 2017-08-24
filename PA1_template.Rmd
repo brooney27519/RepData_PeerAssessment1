@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---------------
 Author: Brian Rooney
 Course: Reproducible Research - Week 2 - Project 1
@@ -205,3 +206,212 @@ xyplot(avgSteps ~ interval | typeDay, layout= c(1,2),
        data=avgNumStepsIntervalDay, t="l",
        xlab = "interval", ylab = "Number of steps")
 ```
+=======
+---------------
+Author: Brian Rooney
+Course: Reproducible Research - Week 2 - Project 1
+---------------
+
+# Introduction
+
+This analysis will examine data from a personal activity monitoring device. This device collects the number of steps taken in 5 minute intervals each day, over the months of October and November, 2012 from an anonymous individual.
+
+## Load and Preprocess the Data
+```{r dataload,echo=TRUE}
+  temp <- tempfile()
+  download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", temp)
+  ## Store activity data in "act" dataframe
+  act <- read.csv(unz(temp,"activity.csv"))
+  unlink(temp)
+  
+  act$date <- as.Date(as.character(act$date), "%Y-%m-%d")
+```
+
+## Total Number of Steps Taken Each Day
+```{r totalSteps,echo=TRUE}
+## use aggregate function which ignores missing values by default
+totalStepsPerDay <- aggregate(steps ~ date,data=act,FUN = sum)
+colnames(totalStepsPerDay) <- c("Date","totalSteps")
+totalStepsPerDay
+```
+
+### Histogram of Total Number of Steps per Day
+```{r histSteps,echo=TRUE}
+library(ggplot2,warn.conflicts = FALSE,quietly = TRUE)
+
+## Estimate the number of bins and binwidth for the histogram
+numObs <- length(totalStepsPerDay$totalSteps)
+numBins <- sqrt(numObs)
+maxTotalSteps <- max(totalStepsPerDay$totalSteps)
+minTotalSteps <- min(totalStepsPerDay$totalSteps)
+bw <- round((maxTotalSteps - minTotalSteps)/numBins)
+
+## Plot the Histogram
+ggplot(totalStepsPerDay, aes(totalSteps)) +
+  geom_histogram(binwidth = bw) +
+  xlab("Total Steps per Day") + ylab("Frequency of Days") +
+  labs(title = "Histogram of Total Number of Steps per Day")
+```
+
+### Summary Statistics
+```{r summarystats, echo=TRUE}
+## Overall summary statistics
+summary(totalStepsPerDay$totalSteps)
+
+## Mean and Median of Total Steps by Day
+meanTotalStepsPerDay <- with(act, tapply(steps,as.factor(date),mean))
+medianTotalStepsPerDay <- with(act, tapply(steps,as.factor(date),median))
+
+MeanMedian_TotStepsPerDay <- data.frame(Date = names(meanTotalStepsPerDay),
+                                        meanTotalSteps = meanTotalStepsPerDay,
+                                        medianTotalSteps = medianTotalStepsPerDay,
+                                        row.names = NULL)
+
+MeanMedian_TotStepsPerDay
+```
+
+## Mean Number of Steps per Interval
+```{r avgStepsByInterval,echo=TRUE}
+## Calculate mean number of steps for each Interval
+actMeanStepsByInterval <- tapply(act$steps,act$interval,mean,na.rm = TRUE)
+
+## Calculate the MAX Number of Steps and the time interval at which this occurs
+maxPoint <- max(actMeanStepsByInterval)
+x_Coord_maxPoint <- as.integer(names(which(actMeanStepsByInterval == maxPoint)))
+
+## Plot time series of Mean Num Steps by Interval
+par(mar = c(5,4,2,1))
+plot(names(actMeanStepsByInterval),actMeanStepsByInterval,type = "l" , lwd=2, xlab="5-minute Interval",
+     ylab="Mean Number of Steps",main="Mean Number of Steps per 5-minute Interval")
+points(x_Coord_maxPoint, maxPoint,pch=8,col="red")
+text(1450,206,label = paste("Max Num of Steps = ",round(maxPoint)), col="red", cex=0.75)
+text(x=x_Coord_maxPoint-60,y=0,label=x_Coord_maxPoint,col="red",cex=0.75)
+abline(v=x_Coord_maxPoint, lty=2,lwd=1,col="red")
+```
+
+The maximum mean number steps is `r round(maxPoint)`, occurring at time interval = `r x_Coord_maxPoint`.
+
+## Missing Data
+```{r missingData,echo=TRUE}
+## Total number of rows with missing data
+summary(act)
+
+missingStepsValues <- sum(is.na(act$steps))
+```
+The total number of missing values is `r missingStepsValues`, which only occurs in the "steps" variable.
+
+### Replace Missing steps values based on mean Steps for the associated 5-min interval
+```{r replaceMissing,echo=TRUE}
+## Using actMeanStepsByInterval dataframe from above, replace NA values with mean Number of Steps per 5-min Interval.
+
+# Initialize arrays
+obsDate <- as.Date(as.character(array()), format = "%Y-%m-%d")
+obsInterval <- array()
+obsSteps <- array()
+
+## Loop through each observation (obs) of original dataset and if steps = NA for obs, then use obs' interval
+## to lookup mean num of steps for interval and replace NA value with mean Steps for the interval.
+for(i in 1:nrow(act)) {
+  if(is.na(act[i,1])) {
+        obsDate[i] <- act[i,2]
+        obsInterval[i] <- act[i,3]
+        obsSteps[i] <- round(actMeanStepsByInterval[as.integer(names(actMeanStepsByInterval)) == obsInterval[i]][[1]])
+  } else {
+        obsSteps[i] <- act[i,1]
+        obsDate[i] <- act[i,2]
+        obsInterval[i] <- act[i,3]
+  }
+}
+
+## create new dataset with no missing values
+cleanAct <- data.frame(obsSteps,obsDate,obsInterval)
+```
+
+## Re-calculate the Total Number of Steps Taken Each Day with new cleanAct dataset
+```{r newTotalSteps,echo=TRUE}
+newTotalStepsPerDay <- aggregate(obsSteps ~ obsDate,data=cleanAct,FUN = sum)
+colnames(newTotalStepsPerDay) <- c("obsDate","newTotalSteps")
+newTotalStepsPerDay
+```
+
+### Compare Histograms of Total Number of Steps per Day
+```{r newHistSteps,echo=TRUE}
+library(gridExtra,warn.conflicts = FALSE,quietly = TRUE)
+
+## Original Histogram from above - missing data removed
+noMissHist <- ggplot(totalStepsPerDay, aes(totalSteps)) +
+  geom_histogram(binwidth = bw) +
+  ylim(0,30) +
+  xlab("Total Steps per Day") + ylab("Frequency of Days") +
+  ggtitle("Histogram of Total Number of Steps \nper Day - No Missing Values")
+
+## New Histogram - missing values replaced
+replacedMissHist <- ggplot(newTotalStepsPerDay, aes(newTotalSteps)) +
+  geom_histogram(binwidth = bw) +
+  ylim(0,30) +
+  xlab("Total Steps per Day") + ylab("Frequency of Days") +
+  ggtitle("Histogram of Total Number of Steps \nper Day - Replaced Missing Values")
+
+grid.arrange(noMissHist,replacedMissHist,ncol = 2)
+```
+
+
+```{r compareStats,echo=TRUE}
+## Stats for Activity Data with no missing values
+summary(totalStepsPerDay$totalSteps)
+
+## Stats for Activity with missing values replaced
+summary(newTotalStepsPerDay$newTotalSteps)
+```
+
+The mean of the 2 datasets is exactly the same, while the median and quartiles 1 and 3 differ slightly.
+Replacing missing values had no siginficant impact on the data.
+
+### Compare the Total Number of Steps between both datasets
+```{r compareTotalSteps,echo=TRUE}
+## Show a side-by-side comparison of Total Steps with NAs to Total Steps with NAs imputed
+library(dplyr,warn.conflicts = FALSE,quietly = TRUE)
+compareTotals <- merge(totalStepsPerDay, newTotalStepsPerDay,by.x = "Date", by.y = "obsDate", all = TRUE)
+colnames(compareTotals) <- c("Date","totalStepsWithNAs","totalStepsNAsImputed")
+## Grand Total - totalStepsWithNAs
+gtWithNAs <- round(sum(totalStepsPerDay$totalSteps,na.rm = TRUE))
+## Grand Total - totalStepsNAsImputed
+gtReplacedNAs <- round(sum(newTotalStepsPerDay$newTotalSteps))
+```
+
+* The Grand Total Number Steps with NAs = `r format(gtWithNAs, scientific=FALSE)`
+
+* The Grand Total Number Steps with NAs replaced = `r format(gtReplacedNAs, scientific=FALSE)`
+
+## Comparison of Mean Total Steps per Interval between Weekdays and Weekends
+```{r WeekdaysWeekends,echo=TRUE}
+## Prepare data for plot
+library(lubridate,warn.conflicts = FALSE,quietly = TRUE)
+typeDay <- as.factor(if_else(wday(cleanAct[,2]) %in% (2:6),"weekday","weekend"))
+cleanAct <- cbind(cleanAct,typeDay)
+
+weekdayAct <- subset(cleanAct, typeDay == "weekday", select = obsSteps:typeDay)
+weekendAct <- subset(cleanAct, typeDay == "weekend", select = obsSteps:typeDay)
+
+weekdayAvgSteps <- with(weekdayAct, tapply(obsSteps, obsInterval, mean))
+weekendAvgSteps <- with(weekendAct, tapply(obsSteps, obsInterval, mean))
+
+dfWeekday <- data.frame(interval = as.integer(names(weekdayAvgSteps)),
+                        typeDay = "weekday",
+                        avgSteps = as.integer(weekdayAvgSteps))
+
+dfWeekend <- data.frame(interval = as.integer(names(weekendAvgSteps)),
+                        typeDay = "weekend",
+                        avgSteps = as.integer(weekendAvgSteps))
+
+avgNumStepsIntervalDay <- rbind(dfWeekday, dfWeekend)
+```
+
+### Plot of Number of Steps per Interval (weekdays vs weekend)
+```{r weekDayEndPlot,echo=TRUE}
+library(lattice,warn.conflicts = FALSE,quietly = TRUE)
+xyplot(avgSteps ~ interval | typeDay, layout= c(1,2),
+       data=avgNumStepsIntervalDay, t="l",
+       xlab = "interval", ylab = "Number of steps")
+```
+>>>>>>> 3c1b97c5a9b829f7eee8857a03cdb16b8e37da99
